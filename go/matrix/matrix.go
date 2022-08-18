@@ -8,10 +8,7 @@ import (
 
 // Define the Matrix type here.
 type Matrix struct {
-	rowNum int
-	colNum int
-	rows   [][]int
-	cols   [][]int
+	data [][]int
 }
 
 func New(s string) (*Matrix, error) {
@@ -19,25 +16,26 @@ func New(s string) (*Matrix, error) {
 	if len(rows) <= 0 {
 		return nil, errors.New("wrong input")
 	}
-	m := Matrix{}
-	m.rowNum = len(rows)
-	for _, row := range rows {
-		row = strings.Trim(row, " ")
-		cols := strings.Split(row, " ")
-		if m.colNum == 0 {
-			m.colNum = len(cols)
-		} else if m.colNum != len(cols) {
-			return nil, errors.New("wrong")
+	m := Matrix{
+		data: make([][]int, len(rows)),
+	}
+	var col_num int = 0
+	for i, row := range rows {
+		cols := strings.Split(strings.TrimSpace(row), " ")
+		if col_num == 0 {
+			col_num = len(cols)
 		}
-		var colArr []int
-		for _, col := range cols {
+		if col_num != len(cols) {
+			return nil, errors.New("all rows must have same width")
+		}
+		m.data[i] = make([]int, len(cols))
+		for j, col := range cols {
 			coli, e := strconv.Atoi(col)
 			if e != nil {
 				return nil, e
 			}
-			colArr = append(colArr, coli)
+			m.data[i][j] = coli
 		}
-		m.rows = append(m.rows, colArr)
 	}
 
 	return &m, nil
@@ -45,18 +43,32 @@ func New(s string) (*Matrix, error) {
 
 // Cols and Rows must return the results without affecting the matrix.
 func (m *Matrix) Cols() [][]int {
-	return nil
+	cols := make([][]int, len(m.data[0]))
+	for i := range cols {
+		cols[i] = make([]int, len(m.data))
+		for j := range cols[i] {
+			cols[i][j] = m.data[j][i]
+		}
+	}
+	return cols
 }
 
 func (m *Matrix) Rows() [][]int {
-	var res [][]int
-	for _, v := range m.rows {
-		res = append(res, v)
+	var r [][]int
+	for _, row := range m.data {
+		var rowdate []int
+		rowdate = append(rowdate, row...)
+		r = append(r, rowdate)
 	}
-	return res
+	return r
 }
 
 func (m *Matrix) Set(row, col, val int) bool {
-	m.rows[row-1][col-1] = val
+	row_size := len(m.data)
+	col_size := len(m.data[0])
+	if row < 0 || row >= row_size || col < 0 || col >= col_size {
+		return false
+	}
+	m.data[row][col] = val
 	return true
 }
