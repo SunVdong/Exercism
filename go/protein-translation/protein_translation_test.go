@@ -1,12 +1,8 @@
 package protein
 
 import (
-	"errors"
 	"testing"
 )
-
-var ErrStop = errors.New("Stop codon")
-var ErrInvalidBase = errors.New("")
 
 func TestErrorsNotNil(t *testing.T) {
 	if ErrStop == nil {

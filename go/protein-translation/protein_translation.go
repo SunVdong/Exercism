@@ -2,27 +2,27 @@ package protein
 
 import (
 	"errors"
-	"fmt"
 )
 
+var ErrStop = errors.New("stop")
+var ErrInvalidBase = errors.New("invalid base")
+
 func FromRNA(rna string) ([]string, error) {
-	l := len(rna)
-
-	if l <= 0 {
-		return nil, fmt.Errorf("too short")
-	}
-
-	if l%3 != 0 {
-		return nil, fmt.Errorf("invalid length: %s", rna)
-	}
-
-	condons := ""
+	condon := ""
 	var res []string
 	for i, v := range rna {
-		condons += string(v)
+		condon += string(v)
 		if i%3 == 2 {
-			res = append(res, condons)
-			condons = ""
+			p, e := FromCodon(condon)
+			switch e {
+			case ErrStop:
+				return res, nil
+			case ErrInvalidBase:
+				return nil, e
+			default:
+				res = append(res, p)
+				condon = ""
+			}
 		}
 	}
 
@@ -47,10 +47,9 @@ func FromCodon(codon string) (string, error) {
 	case "UGG":
 		str += "Tryptophan"
 	case "UAA", "UAG", "UGA":
-		// return "", fmt.Errorf("Stop codon: %s", codon)
-		return "", errors.New("Stop codon")
+		return "", ErrStop
 	default:
-		return "", fmt.Errorf("Unknown codon: %s", codon)
+		return "", ErrInvalidBase
 	}
 
 	return str, nil
