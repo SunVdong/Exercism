@@ -5,7 +5,7 @@ import (
 )
 
 func Encode(pt string) string {
-	str := normalize(pt)
+	str := strings.Map(normalizer, pt)
 	len := len(str)
 	if len == 0 {
 		return ""
@@ -32,17 +32,12 @@ func Encode(pt string) string {
 	return sb.String()
 }
 
-func normalize(s string) string {
-	var sb strings.Builder
-	low := strings.ToLower(s)
-	for _, r := range low {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			// if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			sb.WriteRune(r)
-		}
+func normalizer(r rune) (newR rune) {
+	r, newR = r|32, -1
+	if 'a' <= r && r <= 'z' || '0' <= r && r <= '9' {
+		newR = r
 	}
-
-	return sb.String()
+	return
 }
 
 func getRowCol(len int) (row, col int) {
