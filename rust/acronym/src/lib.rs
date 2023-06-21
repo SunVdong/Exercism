@@ -1,8 +1,9 @@
 pub fn abbreviate(phrase: &str) -> String {
     phrase
-        .split(|c| c == '-' || c == ' ')
+        .replace("_", "")
+        .split(|c: char| c == '-' || c.is_ascii_whitespace())
         .fold(String::new(), |mut acc, w| {
-            let chars: Vec<char> = w.replace("_", "").chars().collect();
+            let chars: Vec<char> = w.chars().collect();
             let len = chars.len();
 
             if len > 0 {
