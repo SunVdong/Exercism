@@ -1,24 +1,16 @@
 pub fn encode(source: &str) -> String {
-    let mut res = String::new();
-    let mut count = 1;
-    let mut chars = source.chars().peekable();
+    let mut s = source.chars().peekable();
 
-    while let Some(current_char) = chars.next() {
-        if let Some(next_char) = chars.peek() {
-            if current_char == *next_char {
-                count += 1;
-            } else {
-                if count > 1 {
-                    res.push_str(&count.to_string());
-                }
-                res.push(current_char);
-                count = 1;
-            }
-        } else {
+    let mut res = String::new();
+    let mut count = 0;
+    while let Some(curr_char) = s.next() {
+        count += 1;
+        if s.peek() != Some(&curr_char) {
             if count > 1 {
                 res.push_str(&count.to_string());
             }
-            res.push(current_char);
+            res.push(curr_char);
+            count = 0;
         }
     }
     res
