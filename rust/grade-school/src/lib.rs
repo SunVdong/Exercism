@@ -26,8 +26,16 @@ impl School {
     pub fn add(&mut self, grade: u32, student: &str) {
         self.roster
             .entry(grade)
+            // .or_insert(BTreeSet::new())
             .or_default()
             .insert(student.to_string());
+
+        // self.roster
+        //     .entry(grade)
+        //     .and_modify(|students| {
+        //         students.insert(String::from(student));
+        //     })
+        //     .or_insert(vec![String::from(student)].into_iter().collect());
     }
 
     pub fn grades(&self) -> Vec<u32> {
