@@ -1,0 +1,12 @@
+[package]
+edition = "2021"
+name = "parallel-letter-frequency"
+version = "0.0.0"
+
+[dependencies]
+rayon = "1.7"
+
+[profile.dev]
+# Use the nightly compiler for development builds
+# 指定使用 Nightly 版本的 Rust 编译器进行开发构建
+rustc = "nightly"
