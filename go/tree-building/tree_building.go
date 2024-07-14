@@ -2,94 +2,55 @@ package tree
 
 import (
 	"errors"
-	"fmt"
-	"reflect"
 	"sort"
 )
 
 type Record struct {
 	ID     int
 	Parent int
-	Used   bool
 }
 
 type Node struct {
 	ID       int
 	Children []*Node
-	// feel free to add fields as you see fit
-}
-
-func (node Node) IsEmpty() bool {
-	return reflect.DeepEqual(node, Node{})
 }
 
 func Build(records []Record) (*Node, error) {
-	if len(records) <= 0 {
+	if len(records) == 0 {
 		return nil, nil
 	}
 
+	// Sort records by ID
 	sort.Slice(records, func(i, j int) bool {
 		return records[i].ID < records[j].ID
 	})
 
-	root, rec, e := findRoot(records)
-	records = *rec
-
-	if e != nil {
-		return nil, e
-	}
-
-	// return root, nil
-
-	children, recs := findChildren(records, root.ID)
-	if len(recs) > 0 {
-		return nil, errors.New("wrong")
-	}
-	root.Children = children
-
-	fmt.Println("records: ", records)
-	fmt.Println("root: ", root)
-	return root, nil
-}
-
-func findRoot(records []Record) (*Node, *[]Record, error) {
-	var root Node
-	for idx, record := range records {
-		if record.Used {
-			continue
+	nodes := make(map[int]*Node, len(records))
+	for i, record := range records {
+		if record.ID != i {
+			return nil, errors.New("non-continuous IDs")
+		}
+		if record.ID == 0 && record.Parent != 0 {
+			return nil, errors.New("root node has a parent")
+		}
+		if record.ID != 0 && record.ID <= record.Parent {
+			return nil, errors.New("non-root node has ID less than or equal to parent ID")
+		}
+		if _, exists := nodes[record.ID]; exists {
+			return nil, errors.New("duplicate node ID")
 		}
 
-		if record.ID == 0 {
-			if record.Parent != 0 {
-				return nil, nil, errors.New("one root node and has parent")
+		node := &Node{ID: record.ID}
+		nodes[record.ID] = node
+
+		if record.ID != 0 {
+			parentNode, exists := nodes[record.Parent]
+			if !exists {
+				return nil, errors.New("parent node does not exist")
 			}
-
-			if root.IsEmpty() {
-				root.ID = record.ID
-				record.Used = true
-				records = append(records[:idx], records[idx+1:]...)
-				return &root, &records, nil
-			}
+			parentNode.Children = append(parentNode.Children, node)
 		}
 	}
 
-	return nil, nil, errors.New("can't find root node")
-}
-
-func findChildren(records []Record, rootId int) ([]*Node, []Record) {
-	var res []*Node
-	for idx, r := range records {
-		if r.Used == false && r.Parent == rootId {
-			var node Node
-			node.ID = r.ID
-			records = append(records[:idx], records[idx+1:]...)
-			children, rec := findChildren(records, node.ID)
-			node.Children = children
-			records = rec
-
-			res = append(res, &node)
-		}
-	}
-
-	return res, records
+	return nodes[0], nil
 }

@@ -39,9 +39,9 @@ impl Forth {
                 self.data.push(num);
             } else {
                 match (item, status, self.syntax_tree.get("dup-twice")) {
-                    ("_", 0, Some(str)) => {
-                        let _ = self.eval(&str);
-                    }
+                    // ("_", 0, Some(str)) => {
+                    //     let _ = self.eval(&str);
+                    // }
                     ("+", 0, _) => match (self.data.pop(), self.data.pop()) {
                         (Some(r), Some(l)) => self.data.push(l + r),
                         _ => return Err(Error::StackUnderflow),
