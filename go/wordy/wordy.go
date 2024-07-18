@@ -6,12 +6,16 @@ import (
 )
 
 func Answer(question string) (int, bool) {
-	replacer := strings.NewReplacer(
-		"What is ", "",
-		" by", "",
-		"?", "",
-	)
-	question = replacer.Replace(question)
+	// replacer := strings.NewReplacer(
+	// 	"What is ", "",
+	// 	" by", "",
+	// 	"?", "",
+	// )
+	// question = replacer.Replace(question)
+
+	question = strings.TrimPrefix(question, "What is ")
+	question = strings.TrimSuffix(question, "?")
+	question = strings.ReplaceAll(question, " by", "")
 
 	var sum int
 	var opt string
