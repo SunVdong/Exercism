@@ -6,19 +6,10 @@ import (
 	"strings"
 )
 
-// Define the Garden type here.
-
-// The diagram argument starts each row with a '\n'.  This allows Go's
-// raw string literals to present diagrams in source code nicely as two
-// rows flush left, for example,
-//
-//     diagram := `
-//     VVCCGG
-//     VVCCGG`
-
 type Garden struct {
-	diagram string
-	Dm      map[string][]string
+	diagram  string
+	children []string
+	datamap  map[string][]string
 }
 
 var plants = map[rune]string{
@@ -29,32 +20,40 @@ var plants = map[rune]string{
 }
 
 func NewGarden(diagram string, children []string) (*Garden, error) {
-	arr := strings.Split(diagram, "\n")
-	if len(arr) < 3 {
-		return nil, errors.New("wrong")
+	if len(diagram) > 0 && diagram[0] != '\n' {
+		return nil, errors.New("wrong diagram format")
 	}
-	if len(children) <= 0 {
+
+	if strings.ToUpper(diagram) != diagram {
+		return nil, errors.New("invalid cup codes")
+	}
+
+	diagram_str := strings.ReplaceAll(diagram, "\n", "")
+	if len(children)*4 != len(diagram_str) {
 		return nil, errors.New("wrong")
 	}
 
-	m := make(map[string][]string)
-	sort.Strings(sort.StringSlice(children))
+	copyChildren := make([]string, len(children))
+	copy(copyChildren, children)
+	sort.Strings(copyChildren)
 
-	for i, v := range children {
-		m[v] = []string{
-			plants[rune(arr[1][i*2])],
-			plants[rune(arr[1][i*2+1])],
-			plants[rune(arr[2][i*2])],
-			plants[rune(arr[2][i*2+1])],
+	m := make(map[string][]string, len(children))
+	runes := []rune(diagram_str)
+
+	for idx, child := range copyChildren {
+		if m[child] != nil {
+			return nil, errors.New("duplacate name")
 		}
+		pls := []string{plants[runes[idx*2]], plants[runes[idx*2+1]], plants[runes[(idx+len(children))*2]], plants[runes[(idx+len(children))*2+1]]}
+		m[child] = pls
 	}
-	gd := Garden{diagram: diagram, Dm: m}
-	return &gd, nil
+
+	return &Garden{diagram: diagram_str, children: children, datamap: m}, nil
 }
 
 func (g *Garden) Plants(child string) ([]string, bool) {
-	if v, bool := g.Dm[child]; bool {
-		return v, true
+	if g.datamap[child] != nil {
+		return g.datamap[child], true
 	}
 	return nil, false
 }
