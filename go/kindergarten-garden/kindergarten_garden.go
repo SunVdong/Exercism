@@ -41,7 +41,7 @@ func NewGarden(diagram string, children []string) (*Garden, error) {
 	runes := []rune(diagram_str)
 
 	for idx, child := range copyChildren {
-		if m[child] != nil {
+		if _, ok := m[child]; ok {
 			return nil, errors.New("duplacate name")
 		}
 		pls := []string{plants[runes[idx*2]], plants[runes[idx*2+1]], plants[runes[(idx+len(children))*2]], plants[runes[(idx+len(children))*2+1]]}
@@ -52,8 +52,6 @@ func NewGarden(diagram string, children []string) (*Garden, error) {
 }
 
 func (g *Garden) Plants(child string) ([]string, bool) {
-	if g.datamap[child] != nil {
-		return g.datamap[child], true
-	}
-	return nil, false
+	plants, ok := (g.datamap)[child]
+	return plants, ok
 }
