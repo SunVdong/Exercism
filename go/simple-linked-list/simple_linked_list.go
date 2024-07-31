@@ -28,18 +28,8 @@ func (l *List) Size() int {
 }
 
 func (l *List) Push(element int) {
-	node := &Node{data: element}
-	if l.head == nil {
-		l.head = node
-		l.size++
-	} else {
-		curr := l.head
-		for curr.next != nil {
-			curr = curr.next
-		}
-		curr.next = node
-		l.size++
-	}
+	l.head = &Node{data: element, next: l.head}
+	l.size++
 }
 
 func (l *List) Pop() (int, error) {
@@ -47,43 +37,27 @@ func (l *List) Pop() (int, error) {
 		return 0, errors.New("list is empty")
 	}
 
-	if l.head.next == nil {
-		data := l.head.data
-		l.head = nil
-		l.size = 0
-		return data, nil
-	}
-	curr := l.head
-	for curr.next.next != nil {
-		curr = curr.next
-	}
-	data := curr.next.data
-
-	curr.next = nil
+	deadHead := l.head
+	l.head = deadHead.next
+	deadHead.next = nil
 	l.size--
-
-	return data, nil
+	return deadHead.data, nil
 }
 
 func (l *List) Array() []int {
-	var arr []int
-	curr := l.head
-	for curr != nil {
-		arr = append(arr, curr.data)
-		curr = curr.next
+	output := make([]int, l.size)
+
+	for i, head := l.size-1, l.head; i > -1; i, head = i-1, head.next {
+		output[i] = head.data
 	}
-	return arr
+
+	return output
 }
 
 func (l *List) Reverse() *List {
-	var prev, next *Node
-	current := l.head
-	for current != nil {
-		next = current.next
-		current.next = prev
-		prev = current
-		current = next
+	output := &List{}
+	for head := l.head; head != nil; head = head.next {
+		output.Push(head.data)
 	}
-	l.head = prev
-	return l
+	return output
 }
