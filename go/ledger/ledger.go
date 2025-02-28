@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"time"
 )
 
@@ -52,14 +51,13 @@ func (e Entry) FormatChange(currency string, locale string) string {
 	if currency == "USD" {
 		symbol = "$"
 	}
-	is_negative := e.Change < 0
+	isNegative := e.Change < 0
 
-	change := e.Change * -1
-	change_str := strconv.Itoa(change)
-	l := len(change_str)
+	//change := e.Change * -1
+	//change_str := strconv.Itoa(change)
+	//l := len(change_str)
 
 	if locale == "nl-NL" {
-
 		if float64(e.Change)/100 > 1000 {
 			return fmt.Sprintf("%s %d.%3d,%2d ", symbol, e.Change/100/1000, e.Change/100%1000, e.Change%100)
 		}
@@ -67,7 +65,7 @@ func (e Entry) FormatChange(currency string, locale string) string {
 			return fmt.Sprintf("%s %d,%d-", symbol, -1*e.Change/100, -1*e.Change%100)
 		}
 	}
-	if is_negative {
+	if isNegative {
 		return fmt.Sprintf("(%s%.2f)", symbol, -1*float64(e.Change)/100)
 	} else {
 		return fmt.Sprintf(" %s%.2f ", symbol, float64(e.Change)/100)
@@ -92,7 +90,7 @@ func (el EntryList) Len() int {
 	return len(el)
 }
 
-// order : Date > Description > Change
+// Less order : Date > Description > Change
 func (el EntryList) Less(i, j int) bool {
 	time_i, _ := time.Parse("2006-01-02", el[i].Date)
 	time_j, _ := time.Parse("2006-01-02", el[j].Date)
