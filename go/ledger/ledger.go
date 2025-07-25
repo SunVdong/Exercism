@@ -4,325 +4,267 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
+// 支持的货币类型
+const (
+	CurrencyEUR = "EUR"
+	CurrencyUSD = "USD"
+)
+
+// 支持的地区
+const (
+	LocaleDutch = "nl-NL"
+	LocaleUS    = "en-US"
+)
+
+// 格式化常量
+const (
+	MaxDescriptionLength = 25
+	TruncateLength       = 22
+	DateFormat           = "2006-01-02"
+	DutchDateFormat      = "02-01-2006"
+	USDateFormat         = "01/02/2006"
+)
+
+// 错误信息
+var (
+	ErrInvalidCurrency = errors.New("invalid currency")
+	ErrInvalidLocale   = errors.New("invalid locale")
+	ErrInvalidDate     = errors.New("invalid date")
+)
+
+// Entry 表示一个账目条目
 type Entry struct {
-	Date        string // "Y-m-d"
+	Date        string // 格式: "YYYY-MM-DD"
 	Description string
-	Change      int // in cents
+	Change      int // 以分为单位
 }
 
-type FormatType struct {
-	Currency string
-	Local    string
-}
-
+// EntryList 实现 sort.Interface 用于排序
 type EntryList []Entry
 
-func (e Entry) FormatDate(locale string) (string, error) {
-	t, err := time.Parse("2006-01-02", e.Date)
+// 表头映射
+var headers = map[string][]string{
+	LocaleDutch: {"Datum", "Omschrijving", "Verandering"},
+	LocaleUS:    {"Date", "Description", "Change"},
+}
+
+// 货币符号映射
+var currencySymbols = map[string]string{
+	CurrencyEUR: "€",
+	CurrencyUSD: "$",
+}
+
+// FormatLedger 格式化账目列表
+func FormatLedger(currency string, locale string, entries []Entry) (string, error) {
+	if err := validateInput(currency, locale); err != nil {
+		return "", err
+	}
+
+	// 创建副本避免修改原始数据
+	entriesCopy := make([]Entry, len(entries))
+	copy(entriesCopy, entries)
+	sort.Sort(EntryList(entriesCopy))
+
+	return buildLedgerOutput(currency, locale, entriesCopy)
+}
+
+// validateInput 验证输入参数
+func validateInput(currency, locale string) error {
+	if currency != CurrencyEUR && currency != CurrencyUSD {
+		return ErrInvalidCurrency
+	}
+	if locale != LocaleDutch && locale != LocaleUS {
+		return ErrInvalidLocale
+	}
+	return nil
+}
+
+// buildLedgerOutput 构建账目输出
+func buildLedgerOutput(currency, locale string, entries []Entry) (string, error) {
+	var result strings.Builder
+
+	// 添加表头
+	result.WriteString(formatHeader(locale))
+
+	// 添加条目
+	for _, entry := range entries {
+		formattedEntry, err := formatEntry(entry, currency, locale)
+		if err != nil {
+			return "", err
+		}
+		result.WriteString(formattedEntry)
+	}
+
+	return result.String(), nil
+}
+
+// formatEntry 格式化单个条目
+func formatEntry(entry Entry, currency, locale string) (string, error) {
+	date, err := formatDate(entry.Date, locale)
 	if err != nil {
-		return "", errors.New("invalid date")
+		return "", err
 	}
 
-	if locale == "nl-NL" {
-		return t.Format("02-01-2006"), nil
-	} else if locale == "en-US" {
-		return t.Format("01/02/2006"), nil
-	}
+	description := formatDescription(entry.Description)
+	change := formatChange(entry.Change, currency, locale)
 
-	return "", errors.New("invalid locale")
+	return fmt.Sprintf("%-10s | %-25s | %13s\n", date, description, change), nil
 }
 
-func (e Entry) FormatDes() string {
-	des := e.Description
-	if len(des) > 25 {
-		des = des[:22] + "..."
+// formatDate 格式化日期
+func formatDate(dateStr, locale string) (string, error) {
+	date, err := time.Parse(DateFormat, dateStr)
+	if err != nil {
+		return "", ErrInvalidDate
 	}
-	return des
+
+	switch locale {
+	case LocaleDutch:
+		return date.Format(DutchDateFormat), nil
+	case LocaleUS:
+		return date.Format(USDateFormat), nil
+	default:
+		return "", ErrInvalidLocale
+	}
 }
 
-func (e Entry) FormatChange(currency string, locale string) string {
-	symbol := ""
-	if currency == "EUR" {
-		symbol = "€"
+// formatDescription 格式化描述，截断过长的描述
+func formatDescription(description string) string {
+	if len(description) > MaxDescriptionLength {
+		return description[:TruncateLength] + "..."
 	}
-	if currency == "USD" {
-		symbol = "$"
-	}
-	isNegative := e.Change < 0
+	return description
+}
 
-	//change := e.Change * -1
-	//change_str := strconv.Itoa(change)
-	//l := len(change_str)
+// formatChange 格式化金额变化
+func formatChange(change int, currency, locale string) string {
+	symbol := currencySymbols[currency]
+	isNegative := change < 0
+	absChange := abs(change)
 
-	if locale == "nl-NL" {
-		if float64(e.Change)/100 > 1000 {
-			return fmt.Sprintf("%s %d.%3d,%2d ", symbol, e.Change/100/1000, e.Change/100%1000, e.Change%100)
-		}
-		if -1*e.Change > 100 {
-			return fmt.Sprintf("%s %d,%d-", symbol, -1*e.Change/100, -1*e.Change%100)
-		}
+	switch locale {
+	case LocaleDutch:
+		return formatDutchChange(absChange, symbol, isNegative)
+	case LocaleUS:
+		return formatUSChange(absChange, symbol, isNegative)
+	default:
+		return ""
 	}
-	if isNegative {
-		return fmt.Sprintf("(%s%.2f)", symbol, -1*float64(e.Change)/100)
+}
+
+// formatDutchChange 格式化荷兰格式的金额
+func formatDutchChange(absChange int, symbol string, isNegative bool) string {
+	dollars := absChange / 100
+	cents := absChange % 100
+
+	var result string
+	if dollars >= 1000 {
+		// 大数字使用点号分隔千位
+		dollarsStr := formatNumberWithDots(dollars)
+		result = fmt.Sprintf("%s %s,%02d", symbol, dollarsStr, cents)
 	} else {
-		return fmt.Sprintf(" %s%.2f ", symbol, float64(e.Change)/100)
+		result = fmt.Sprintf("%s %d,%02d", symbol, dollars, cents)
 	}
 
-}
-
-func (e Entry) StringWithFormat(currency string, locale string) (string, error) {
-	t, err := e.FormatDate(locale)
-	if err != nil {
-		return "", errors.New("invalid date")
+	// 荷兰格式：负数在末尾加负号
+	if isNegative {
+		result += "-"
+	} else {
+		result += " "
 	}
 
-	des := e.FormatDes()
-
-	cha := e.FormatChange(currency, locale)
-
-	return fmt.Sprintf("%-10s | %-25s | %13s\n", t, des, cha), nil
+	return result
 }
 
+// formatUSChange 格式化美式格式的金额
+func formatUSChange(absChange int, symbol string, isNegative bool) string {
+	dollars := absChange / 100
+	cents := absChange % 100
+	dollarsStr := formatNumberWithCommas(dollars)
+
+	if isNegative {
+		// 美式格式：负数用括号包围
+		return fmt.Sprintf("(%s%s.%02d)", symbol, dollarsStr, cents)
+	} else {
+		return fmt.Sprintf(" %s%s.%02d ", symbol, dollarsStr, cents)
+	}
+}
+
+// formatNumberWithCommas 为数字添加千位逗号分隔符
+func formatNumberWithCommas(n int) string {
+	str := strconv.Itoa(n)
+	if n < 0 {
+		str = str[1:] // 移除负号
+	}
+
+	// 从右往左每三位添加逗号
+	for i := len(str) - 3; i > 0; i -= 3 {
+		str = str[:i] + "," + str[i:]
+	}
+
+	if n < 0 {
+		str = "-" + str
+	}
+	return str
+}
+
+// formatNumberWithDots 为数字添加千位点号分隔符
+func formatNumberWithDots(n int) string {
+	str := strconv.Itoa(n)
+
+	// 从右往左每三位添加点号
+	for i := len(str) - 3; i > 0; i -= 3 {
+		str = str[:i] + "." + str[i:]
+	}
+
+	return str
+}
+
+// abs 返回整数的绝对值
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+// formatHeader 格式化表头
+func formatHeader(locale string) string {
+	titles, ok := headers[locale]
+	if !ok {
+		return "Unsupported locale\n"
+	}
+	return fmt.Sprintf("%-10s | %-25s | %s\n", titles[0], titles[1], titles[2])
+}
+
+// sort.Interface 实现
 func (el EntryList) Len() int {
 	return len(el)
 }
 
-// Less order : Date > Description > Change
+// Less 定义排序规则：日期 > 描述 > 金额
 func (el EntryList) Less(i, j int) bool {
-	time_i, _ := time.Parse("2006-01-02", el[i].Date)
-	time_j, _ := time.Parse("2006-01-02", el[j].Date)
-	if time_i != time_j {
-		return time_i.Before(time_j)
+	// 首先按日期排序
+	timeI, _ := time.Parse(DateFormat, el[i].Date)
+	timeJ, _ := time.Parse(DateFormat, el[j].Date)
+	if !timeI.Equal(timeJ) {
+		return timeI.Before(timeJ)
 	}
+
+	// 日期相同时按描述排序
 	if el[i].Description != el[j].Description {
 		return el[i].Description < el[j].Description
 	}
+
+	// 描述相同时按金额排序
 	return el[i].Change < el[j].Change
 }
 
 func (el EntryList) Swap(i, j int) {
 	el[i], el[j] = el[j], el[i]
 }
-
-var headers = map[string][]string{
-	"nl-NL": {"Datum", "Omschrijving", "Verandering"},
-	"en-US": {"Date", "Description", "Change"},
-}
-
-func formatHeader(locale string) string {
-	titles, ok := headers[locale]
-	if !ok {
-		return "Unsupported locale\n"
-	}
-
-	return fmt.Sprintf("%-10s | %-25s | %s\n", titles[0], titles[1], titles[2])
-}
-
-func FormatLedger(currency string, locale string, entries []Entry) (string, error) {
-	if currency != "EUR" && currency != "USD" {
-		return "", errors.New("invalid currency")
-	}
-	if locale != "nl-NL" && locale != "en-US" {
-		return "", errors.New("invalid locale")
-	}
-	sort.Sort(EntryList(entries))
-
-	var res string
-	res = formatHeader(locale)
-	for _, e := range entries {
-		s, err := e.StringWithFormat(currency, locale)
-		if err != nil {
-			return "", err
-		}
-		res += s
-	}
-
-	return res, nil
-
-}
-
-// func FormatLedger(currency string, locale string, entries []Entry) (string, error) {
-// 	if currency != "EUR" && currency != "USD" {
-// 		return "", errors.New("invalid currency")
-// 	}
-// 	if locale != "nl-NL" && locale != "en-US" {
-// 		return "", errors.New("invalid locale")
-// 	}
-
-// 	var entriesCopy []Entry
-// 	entriesCopy = append(entriesCopy, entries...)
-// 	m1 := map[bool]int{true: 0, false: 1}
-// 	m2 := map[bool]int{true: -1, false: 1}
-// 	es := entriesCopy
-// 	for len(es) > 1 {
-// 		first, rest := es[0], es[1:]
-// 		success := false
-// 		for !success {
-// 			success = true
-// 			for i, e := range rest {
-// 				if (m1[e.Date == first.Date]*m2[e.Date < first.Date]*4 +
-// 					m1[e.Description == first.Description]*m2[e.Description < first.Description]*2 +
-// 					m1[e.Change == first.Change]*m2[e.Change < first.Change]*1) < 0 {
-// 					es[0], es[i+1] = es[i+1], es[0]
-// 					success = false
-// 				}
-// 			}
-// 		}
-// 		es = es[1:]
-// 	}
-// 	s := formatHeader(locale)
-
-// 	// Parallelism, always a great idea
-// 	co := make(chan struct {
-// 		i int
-// 		s string
-// 		e error
-// 	})
-// 	for i, et := range entriesCopy {
-// 		go func(i int, entry Entry) {
-// 			t, err := time.Parse("2006-01-02", entry.Date)
-// 			if err != nil {
-// 				co <- struct {
-// 					i int
-// 					s string
-// 					e error
-// 				}{e: errors.New("")}
-// 			}
-// 			var d string
-// 			if locale == "nl-NL" {
-// 				d = t.Format("02-01-2006")
-// 			} else if locale == "en-US" {
-// 				d = t.Format("01/02/2006")
-// 			}
-
-// 			de := entry.Description
-// 			if len(de) > 25 {
-// 				de = de[:22] + "..."
-// 			} else {
-// 				de = de + strings.Repeat(" ", 25-len(de))
-// 			}
-
-// 			negative := false
-// 			cents := entry.Change
-// 			if cents < 0 {
-// 				cents = cents * -1
-// 				negative = true
-// 			}
-// 			var a string
-// 			if locale == "nl-NL" {
-// 				if currency == "EUR" {
-// 					a += "€"
-// 				} else if currency == "USD" {
-// 					a += "$"
-// 				} else {
-// 					co <- struct {
-// 						i int
-// 						s string
-// 						e error
-// 					}{e: errors.New("")}
-// 				}
-// 				a += " "
-// 				centsStr := strconv.Itoa(cents)
-// 				switch len(centsStr) {
-// 				case 1:
-// 					centsStr = "00" + centsStr
-// 				case 2:
-// 					centsStr = "0" + centsStr
-// 				}
-// 				rest := centsStr[:len(centsStr)-2]
-// 				var parts []string
-// 				for len(rest) > 3 {
-// 					parts = append(parts, rest[len(rest)-3:])
-// 					rest = rest[:len(rest)-3]
-// 				}
-// 				if len(rest) > 0 {
-// 					parts = append(parts, rest)
-// 				}
-// 				for i := len(parts) - 1; i >= 0; i-- {
-// 					a += parts[i] + "."
-// 				}
-// 				a = a[:len(a)-1]
-// 				a += ","
-// 				a += centsStr[len(centsStr)-2:]
-// 				if negative {
-// 					a += "-"
-// 				} else {
-// 					a += " "
-// 				}
-// 			} else if locale == "en-US" {
-// 				if negative {
-// 					a += "("
-// 				}
-// 				if currency == "EUR" {
-// 					a += "€"
-// 				} else if currency == "USD" {
-// 					a += "$"
-// 				} else {
-// 					co <- struct {
-// 						i int
-// 						s string
-// 						e error
-// 					}{e: errors.New("")}
-// 				}
-// 				centsStr := strconv.Itoa(cents)
-// 				switch len(centsStr) {
-// 				case 1:
-// 					centsStr = "00" + centsStr
-// 				case 2:
-// 					centsStr = "0" + centsStr
-// 				}
-// 				rest := centsStr[:len(centsStr)-2]
-// 				var parts []string
-// 				for len(rest) > 3 {
-// 					parts = append(parts, rest[len(rest)-3:])
-// 					rest = rest[:len(rest)-3]
-// 				}
-// 				if len(rest) > 0 {
-// 					parts = append(parts, rest)
-// 				}
-// 				for i := len(parts) - 1; i >= 0; i-- {
-// 					a += parts[i] + ","
-// 				}
-// 				a = a[:len(a)-1]
-// 				a += "."
-// 				a += centsStr[len(centsStr)-2:]
-// 				if negative {
-// 					a += ")"
-// 				} else {
-// 					a += " "
-// 				}
-// 			} else {
-// 				co <- struct {
-// 					i int
-// 					s string
-// 					e error
-// 				}{e: errors.New("")}
-// 			}
-// 			var al int
-// 			for range a {
-// 				al++
-// 			}
-// 			co <- struct {
-// 				i int
-// 				s string
-// 				e error
-// 			}{i: i, s: d + strings.Repeat(" ", 10-len(d)) + " | " + de + " | " +
-// 				strings.Repeat(" ", 13-al) + a + "\n"}
-// 		}(i, et)
-// 	}
-// 	ss := make([]string, len(entriesCopy))
-// 	for range entriesCopy {
-// 		v := <-co
-// 		if v.e != nil {
-// 			return "", v.e
-// 		}
-// 		ss[v.i] = v.s
-// 	}
-// 	for i := 0; i < len(entriesCopy); i++ {
-// 		s += ss[i]
-// 	}
-// 	return s, nil
-// }
